@@ -3,9 +3,12 @@
 */
   unsigned long previousMillis = 0;
   
-  const unsigned long debounceDelay = 500;  // 50 ms debounce (to ensurue that multiple activations of swtich due to inherent bounce are not counted as multiple)
+  const unsigned long debounceDelay = 500;  // 500 ms debounce (to ensurue that multiple activations of swtich due to inherent bounce are not counted as multiple)
   unsigned long lastCalfChange = 0;
   unsigned long lastAnkleChange = 0;
+
+  int prevCalfState = HIGH;
+  int prevAnkleState = HIGH;
   
   int calf = 2;
   int ankle = 3;
@@ -14,9 +17,9 @@
   int ankle_count = 0;
   int cycle_count = 0;
 
-  unsigned long calf_time[10];  // array for 60 cycles 
-  unsigned long ankle_time[10];
-  unsigned long cycle_time[10];
+  unsigned long calf_time[20];  // array for 60 cycles 
+  unsigned long ankle_time[20];
+  unsigned long cycle_time[20];
 
   int missed = 0;
 
@@ -35,31 +38,57 @@ unsigned long currentMillis = millis();
   int calf_state = digitalRead(calf);   //read and store the state of switch at calf
   int ankle_state = digitalRead(ankle);    //read and store the state of switch at ankle
 
-  if(calf_state == LOW && (currentMillis - lastCalfChange > debounceDelay) && calf_count < 10){        //check if calf is reached    
+  if(calf_state == LOW && (currentMillis - lastCalfChange > debounceDelay)){        //check if calf is reached    
     calf_time[calf_count] = currentMillis - previousMillis;  // log time from ankle to calf
-    if(calf_time[calf_count] != 12){     // log the number translations up the leg that are out of time
+    if(calf_time[calf_count] < (9*1000) || calf_time[calf_count] > (15*1000)){     // log the number translations up the leg that are outside of the +/- 3 sec time threshold
       missed++;
+    }
+
+    Serial.println("calf pressed"); // for testing
+    Serial.print("time to calf: ");
+    Serial.println(calf_time[calf_count]/1000.0);
+
+    if(prevCalfState == HIGH || prevAnkleState == LOW){ //check correct alternating sequence to denote a cycle
+    prevCalfState = LOW;
     }
     calf_count++;               //log calf being reached
     previousMillis = currentMillis;  //reset clock
     lastCalfChange = currentMillis;  //reset debounce timer
-    Serial.println("calf pressed"); // for testing
   }
 
-  if(ankle_state == LOW && (currentMillis - lastAnkleChange > debounceDelay) && ankle_count < 10){        //check if ankle is reached    
+  if(ankle_state == LOW && (currentMillis - lastAnkleChange > debounceDelay)){        //check if ankle is reached    
     ankle_time[ankle_count] = currentMillis - previousMillis; // log time from calf to ankle
-    if(ankle_time[ankle_count] != 48){    // log the number translations up the leg that are out of time
+    if(ankle_time[ankle_count] < (45*1000) || ankle_time[ankle_count] > (51*1000)){    // log the number translations up the leg that are out of time
       missed++;
+    }
+
+    Serial.println("ankle pressed"); // for testing
+    Serial.print("time to ankle: ");
+    Serial.println(ankle_time[ankle_count]/1000.0);
+
+    if(prevAnkleState == HIGH || prevCalfState == LOW){   //check correct alternating sequence to denote a cycle
+    prevAnkleState = LOW;
     }
     ankle_count++;              //log ankle being reached
     previousMillis = currentMillis;  //reset clock
     lastAnkleChange = currentMillis;  //reset debounce timer
-    Serial.println("ankle pressed");  //for testing
   }
 
-  if(calf_count > cycle_count && ankle_count > cycle_count && cycle_count <10){
-    cycle_time[cycle_count] = ankle_time[cycle_count] + calf_time[cycle_count];   //store time for full cycle
-    cycle_count++;  //store cycle number
+  if(prevAnkleState == LOW && prevCalfState == LOW){
+    cycle_count++;
+    cycle_time[cycle_count] = ankle_time[ankle_count-1] + calf_time[calf_count-1];   //store time for full cycle
+    
+    Serial.print("cycle num: ");
+    Serial.println(cycle_count);
+    Serial.print("ankle num:");
+    Serial.println(ankle_count);
+    Serial.print("calf num:");
+    Serial.println(calf_count);
+    Serial.print("cycle time: ");
+    Serial.println(cycle_time[cycle_count]/1000.0);
+    
+    prevCalfState = HIGH;
+    prevAnkleState = HIGH;
   }
 
   if(cycle_count == 10 && !printed){
